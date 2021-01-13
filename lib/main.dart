@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_scanner_app/ClippedImage.dart';
+import 'dart:io';
+import 'dart:math';
+import 'dart:ui' as ui;
 
+import 'package:image_picker/image_picker.dart';
 void main() {
   runApp(MyApp());
 }
@@ -34,14 +40,8 @@ class MyApp extends StatelessWidget {
 class MyHomePage extends StatefulWidget {
   MyHomePage({Key key, this.title}) : super(key: key);
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
 
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
+
 
   final String title;
 
@@ -50,68 +50,183 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+  ui.Image _image;
+  Image _imageWidget;
+  List<ui.Offset> _points = [ui.Offset(90, 120), ui.Offset(90, 370), ui.Offset(320, 370), ui.Offset(320, 120)];
+  bool _clear = false;
+  int _currentlyDraggedIndex = -1;
 
   @override
   Widget build(BuildContext context) {
+    final AppBar appBar = AppBar(
+      backgroundColor: Theme.of(context).colorScheme.primary,
+      title: Text("Scan"),
+    );
     // This method is rerun every time setState is called, for instance as done
     // by the _incrementCounter method above.
     //
     // The Flutter framework has been optimized to make rerunning build methods
     // fast, so that you can just rebuild anything that needs updating rather
     // than having to individually change instances of widgets.
+
     return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
+      appBar: appBar,
       body: Center(
         // Center is a layout widget. It takes a single child and positions it
         // in the middle of the parent.
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
+            if (_imageWidget == null) ...[
+              FlatButton(
+                onPressed: () => _pickImage(ImageSource.camera),
+                color: Colors.blueAccent,
+                padding: EdgeInsets.all(40.0),
+                child: Column(
+                  children: <Widget>[
+                    Icon(Icons.camera_alt, color: Colors.white,),
+                    Text("Camera", style: TextStyle(color: Colors.white),)
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 40, bottom: 40),
+                child: Text("", textScaleFactor: 2,),
+              ),
+              FlatButton(
+                onPressed: () => _pickImage(ImageSource.gallery),
+                color: Colors.brown,
+                padding: EdgeInsets.all(40.0),
+                child: Column(
+                  children: <Widget>[
+                    Icon(Icons.photo, color: Colors.white,),
+                    Text("Gallery", style: TextStyle(color: Colors.white),)
+                  ],
+                ),
+              ),
+            ],
+            if (_imageWidget != null) ...[
+              GestureDetector(
+                onPanStart: (DragStartDetails details) {
+                  // get distance from points to check if is in circle
+                  int indexMatch = -1;
+                  for (int i = 0; i < _points.length; i++) {
+                    double distance = sqrt(pow(details.localPosition.dx - _points[i].dx, 2) + pow(details.localPosition.dy - _points[i].dy, 2));
+                    if (distance <= 30) {
+                      indexMatch = i;
+                      break;
+                    }
+                  }
+                  if (indexMatch != -1) {
+                    _currentlyDraggedIndex = indexMatch;
+                  }
+                },
+                onPanUpdate: (DragUpdateDetails details) {
+                  if (_currentlyDraggedIndex != -1) {
+                    setState(() {
+                      _points = List.from(_points);
+                      _points[_currentlyDraggedIndex] = details.localPosition;
+                    });
+                  }
+                },
+                onPanEnd: (_) {
+                  setState(() {
+                    _currentlyDraggedIndex = -1;
+                  });
+                },
+                child: CustomPaint(
+                  size: Size.fromHeight(MediaQuery.of(context).size.height - appBar.preferredSize.height),
+                  painter: RectanglePainter(points: _points, clear: _clear, image: _image),
+                ),
+              )
+            ]
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
+      floatingActionButton:  FloatingActionButton(
+          child: Icon(Icons.add),
+          onPressed: () {
+            Navigator.of(context).push(PageRouteBuilder(
+              pageBuilder: (BuildContext context, _, __) {
+                return ClippedImage(_imageWidget,_points);
+              },
+            ));
+            // setState(() {
+            //   // _clear = true;
+            //   // _points = [];
+            //
+            //
+            // });
+          }
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
+
+  Future _pickImage(ImageSource imageSource) async {
+    try {
+      final image_picker = ImagePicker();
+      var picked_image = await image_picker.getImage(source: imageSource);
+      // File imageFile = await ImagePicker.pickImage(source: imageSource);
+      File  imageFile = File(picked_image.path);
+      ui.Image finalImg = await _load(imageFile.path);
+      setState(() {
+        _imageWidget = Image.file(imageFile);
+        _image = finalImg ;
+      });
+    } on Exception {
+
+    }
+  }
+
+  Future<ui.Image> _load(String asset) async {
+    ByteData data = await rootBundle.load(asset);
+    ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+    ui.FrameInfo fi = await codec.getNextFrame();
+    return fi.image;
+  }
+}
+class RectanglePainter extends CustomPainter {
+  List<Offset> points;
+  bool clear;
+  final ui.Image image;
+
+  RectanglePainter({@required this.points, @required this.clear, @required this.image});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.red
+      ..strokeCap = StrokeCap.square
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 2;
+
+    final outputRect = Rect.fromPoints(ui.Offset.zero, ui.Offset(size.width, size.height));
+    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
+    final FittedSizes sizes = applyBoxFit(BoxFit.contain, imageSize, outputRect.size);
+    final Rect inputSubrect = Alignment.center.inscribe(sizes.source, Offset.zero & imageSize);
+    final Rect outputSubrect = Alignment.center.inscribe(sizes.destination, outputRect);
+    canvas.drawImageRect(image, inputSubrect, outputSubrect, paint);
+    if (!clear) {
+      final circlePaint = Paint()
+        ..color = Colors.red
+        ..strokeCap = StrokeCap.square
+        ..style = PaintingStyle.fill
+        ..blendMode = BlendMode.multiply
+        ..strokeWidth = 2;
+
+      for (int i = 0; i < points.length; i++) {
+        if (i + 1 == points.length) {
+          canvas.drawLine(points[i], points[0], paint);
+        } else {
+          canvas.drawLine(points[i], points[i + 1], paint);
+        }
+        canvas.drawCircle(points[i], 10, circlePaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(RectanglePainter oldPainter) => oldPainter.points != points || clear ;
+
 }
